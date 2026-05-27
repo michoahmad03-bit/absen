@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absensi Kajian</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --ink:#18181b;--paper:#f9f7f3;--cream:#ede9df;--warm:#b8935a;
+  --warm-light:#f5ead8;--forest:#2c4a3e;--forest-light:#e8f0ec;
+  --red:#c0392b;--red-light:#fdf0ee;--muted:#78716c;--white:#fff;
+  --blue:#2563eb;--blue-light:#dbeafe;
+  --serif:'Cormorant Garamond',serif;--sans:'DM Sans',sans-serif;
+}
+html,body{height:100%;background:var(--paper);font-family:var(--sans);color:var(--ink);}
+body{overflow:hidden;}
+
+.page{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  transition:opacity .4s ease,transform .4s ease;overflow-y:auto;}
+.page.off{opacity:0;pointer-events:none;transform:translateY(16px);}
+
+/* LOADER */
+#pgLoader{background:var(--paper);z-index:999;flex-direction:column;gap:14px;}
+.spin{width:32px;height:32px;border-radius:50%;border:3px solid var(--cream);
+  border-top-color:var(--forest);animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* LOGIN / REGISTER */
+#pgLogin,#pgRegister{flex-direction:column;background:var(--paper);}
+#pgLogin::before,#pgRegister::before{content:'';position:fixed;top:-200px;right:-150px;width:600px;height:600px;
+  border-radius:50%;background:radial-gradient(circle,rgba(184,147,90,.15) 0%,transparent 65%);pointer-events:none;}
+
+.auth-wrap{width:100%;max-width:420px;padding:32px 24px;position:relative;z-index:1;animation:riseUp .6s ease both;}
+.eyebrow{font-size:10px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--warm);
+  margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.eyebrow::before{content:'';width:18px;height:1px;background:var(--warm);}
+.auth-h{font-family:var(--serif);font-size:clamp(34px,8vw,50px);font-weight:600;
+  line-height:1.02;letter-spacing:-.015em;margin-bottom:6px;}
+.auth-h em{font-style:italic;color:var(--forest);}
+.auth-sub{font-size:12.5px;color:var(--muted);margin-bottom:24px;line-height:1.6;}
+
+.inp-g{margin-bottom:11px;}
+.inp-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.inp-lbl{display:block;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:5px;}
+.inp{width:100%;padding:11px 14px;border:1.5px solid var(--cream);border-radius:11px;
+  background:var(--white);font-family:var(--sans);font-size:13px;color:var(--ink);
+  outline:none;transition:border-color .2s,box-shadow .2s;}
+.inp:focus{border-color:var(--warm);box-shadow:0 0 0 3px rgba(184,147,90,.1);}
+.inp::placeholder{color:#c0bab2;}
+.inp-err{font-size:11px;color:var(--red);margin-top:4px;display:none;}
+select.inp{cursor:pointer;}
+
+/* foto upload registrasi */
+.foto-reg-box{border:2px dashed var(--cream);border-radius:12px;background:var(--paper);
+  cursor:pointer;transition:border-color .2s;overflow:hidden;position:relative;
+  height:100px;display:flex;align-items:center;justify-content:center;text-align:center;}
+.foto-reg-box:hover{border-color:var(--warm);}
+.foto-reg-box.filled{border-style:solid;border-color:var(--warm-light);padding:0;}
+.foto-reg-box input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+#regFotoPrev{width:100%;height:100%;object-fit:cover;border-radius:10px;display:none;}
+.foto-reg-box.filled #regFotoPrev{display:block;}
+.foto-reg-box.filled .foto-ph{display:none;}
+.foto-ph{padding:10px;}
+.foto-ph-ico{font-size:22px;opacity:.3;margin-bottom:4px;}
+.foto-ph-t{font-size:11px;font-weight:500;color:var(--ink);}
+
+.btn-main{width:100%;padding:13px;margin-top:4px;background:var(--forest);color:var(--white);
+  border:none;border-radius:11px;font-family:var(--sans);font-size:14px;font-weight:600;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-main:hover{background:#1d3328;box-shadow:0 8px 24px rgba(44,74,62,.25);transform:translateY(-2px);}
+.btn-main:disabled{opacity:.55;cursor:default;transform:none;box-shadow:none;}
+.auth-footer{margin-top:16px;text-align:center;font-size:12px;color:var(--muted);}
+.lnk{background:none;border:none;color:var(--warm);font-weight:600;cursor:pointer;font-size:12px;font-family:var(--sans);}
+.deco-bg{position:fixed;bottom:-60px;right:10px;font-family:var(--serif);font-style:italic;
+  font-size:180px;font-weight:600;color:rgba(184,147,90,.05);pointer-events:none;line-height:1;}
+
+/* ABSEN */
+#pgAbsen{align-items:flex-start;background:var(--paper);}
+.absen-inner{width:100%;max-width:500px;margin:0 auto;padding:20px 16px 60px;animation:riseUp .5s ease both;}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px;}
+.top-greet{font-family:var(--serif);font-size:23px;font-weight:600;line-height:1.15;}
+.top-greet span{font-style:italic;color:var(--forest);}
+.top-date{font-size:11px;color:var(--muted);margin-top:2px;}
+.btn-sm{padding:6px 12px;border:1.5px solid var(--cream);border-radius:8px;background:transparent;
+  font-family:var(--sans);font-size:11px;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.btn-sm:hover{border-color:var(--red);color:var(--red);}
+.btn-sm.blue{border-color:var(--blue-light);color:var(--blue);}
+.btn-sm.blue:hover{background:var(--blue-light);}
+
+.card{background:var(--white);border:1.5px solid var(--cream);border-radius:16px;
+  padding:18px 16px;margin-bottom:11px;box-shadow:0 2px 10px rgba(24,24,27,.04);}
+.card-title{font-family:var(--serif);font-size:17px;font-weight:600;letter-spacing:-.01em;}
+.card-sub{font-size:11px;color:var(--muted);margin-top:2px;margin-bottom:13px;}
+
+.kg-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.kg-opt{padding:10px 8px;border:2px solid var(--cream);border-radius:10px;background:var(--white);
+  cursor:pointer;transition:all .2s;text-align:center;}
+.kg-opt.on{border-color:var(--warm);background:var(--warm-light);}
+.kg-ico{font-size:17px;margin-bottom:3px;}
+.kg-nm{font-size:11px;font-weight:600;color:var(--muted);}
+.kg-opt.on .kg-nm{color:var(--warm);}
+
+.st-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.st-opt{padding:13px 8px;border:2px solid var(--cream);border-radius:12px;background:var(--white);
+  cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.st-opt.hadir{border-color:#2d6a4f;background:#edf7f2;}
+.st-opt.tidak{border-color:var(--red);background:var(--red-light);}
+.st-ico{font-size:22px;}
+.st-lbl{font-size:12px;font-weight:600;color:var(--muted);}
+.st-opt.hadir .st-lbl{color:#2d6a4f;}
+.st-opt.tidak .st-lbl{color:var(--red);}
+
+.photo-box{border:2px dashed var(--cream);border-radius:12px;background:var(--paper);
+  cursor:pointer;transition:border-color .2s;overflow:hidden;position:relative;
+  min-height:110px;display:flex;align-items:center;justify-content:center;}
+.photo-box:hover{border-color:var(--warm);}
+.photo-box.filled{border-style:solid;border-color:var(--warm-light);min-height:0;}
+.photo-box input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.ph-placeholder{text-align:center;padding:18px;}
+.ph-ico{font-size:26px;opacity:.3;margin-bottom:5px;}
+.ph-t{font-size:12px;font-weight:500;color:var(--ink);margin-bottom:2px;}
+.ph-s{font-size:10px;color:var(--muted);}
+#imgPrev{width:100%;max-height:180px;object-fit:cover;border-radius:10px;display:none;}
+.photo-box.filled #imgPrev{display:block;}
+.photo-box.filled .ph-placeholder{display:none;}
+.photo-change{position:absolute;top:7px;right:7px;padding:3px 8px;
+  background:rgba(255,255,255,.85);backdrop-filter:blur(4px);
+  border:1px solid var(--cream);border-radius:6px;font-size:10px;font-weight:600;pointer-events:none;}
+
+.txta{width:100%;padding:10px 13px;border:1.5px solid var(--cream);border-radius:10px;
+  background:var(--white);font-family:var(--sans);font-size:12.5px;color:var(--ink);
+  outline:none;resize:none;transition:border-color .2s;line-height:1.6;}
+.txta:focus{border-color:var(--warm);}
+.txta::placeholder{color:#c0bab2;}
+
+.btn-submit{width:100%;padding:15px;background:var(--forest);color:var(--white);border:none;
+  border-radius:13px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;
+  transition:all .25s;display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 16px rgba(44,74,62,.2);}
+.btn-submit:hover{background:#1d3328;box-shadow:0 10px 28px rgba(44,74,62,.3);transform:translateY(-2px);}
+.btn-submit:disabled{opacity:.5;cursor:default;transform:none;box-shadow:none;}
+.hint-err{font-size:11px;color:var(--red);margin-top:5px;display:none;}
+.tag-opt{font-size:10px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--warm);margin-left:4px;}
+
+/* REKAP MAHASISWA */
+#pgRekap{align-items:flex-start;background:var(--paper);}
+.rekap-inner{width:100%;max-width:500px;margin:0 auto;padding:20px 16px 60px;animation:riseUp .5s ease both;}
+.stat-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.stat-c{background:var(--white);border:1.5px solid var(--cream);border-radius:12px;padding:12px;text-align:center;}
+.stat-n{font-family:var(--serif);font-size:26px;font-weight:700;line-height:1;}
+.stat-n.g{color:#2d6a4f;} .stat-n.r{color:var(--red);} .stat-n.w{color:var(--warm);}
+.stat-l{font-size:10px;color:var(--muted);margin-top:2px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
+.rekap-list{display:flex;flex-direction:column;gap:7px;}
+.rekap-item{background:var(--white);border:1.5px solid var(--cream);border-radius:12px;
+  padding:12px 14px;display:flex;align-items:center;gap:10px;}
+.rekap-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
+.rekap-ico.h{background:#edf7f2;} .rekap-ico.t{background:var(--red-light);}
+.rekap-info{flex:1;}
+.rekap-tgl{font-size:12.5px;font-weight:600;color:var(--ink);}
+.rekap-meta{font-size:11px;color:var(--muted);margin-top:1px;}
+.rekap-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;}
+.badge-h{background:#edf7f2;color:#2d6a4f;} .badge-t{background:var(--red-light);color:var(--red);}
+
+/* ADMIN */
+#pgAdmin{align-items:flex-start;background:#0a0c12;overflow:hidden;}
+.admin-layout{display:flex;width:100%;height:100vh;overflow:hidden;}
+.adm-sidebar{width:220px;flex-shrink:0;background:#111318;border-right:1px solid rgba(255,255,255,.05);
+  display:flex;flex-direction:column;height:100vh;}
+.adm-brand{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.05);}
+.adm-brand-lbl{font-size:9px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.2);margin-bottom:5px;}
+.adm-brand-name{font-family:var(--serif);font-size:20px;font-weight:600;font-style:italic;color:#fff;line-height:1;}
+.adm-brand-name span{color:#6ee7a0;font-style:normal;}
+.live-wrap{display:flex;align-items:center;gap:5px;margin-top:7px;}
+.ldot{width:6px;height:6px;background:#6ee7a0;border-radius:50%;animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.15;}}
+.live-lbl{font-size:10px;color:rgba(255,255,255,.25);}
+.adm-nav{flex:1;padding:12px 8px;overflow-y:auto;}
+.adm-nav-lbl{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:rgba(255,255,255,.18);padding:0 8px;margin:8px 0 4px;}
+.adm-nav-item{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;
+  font-size:12px;font-weight:500;color:rgba(255,255,255,.4);cursor:pointer;
+  transition:all .15s;margin-bottom:2px;border:none;background:none;width:100%;font-family:var(--sans);text-align:left;}
+.adm-nav-item:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.8);}
+.adm-nav-item.on{background:rgba(110,231,160,.1);color:#6ee7a0;}
+.adm-footer{padding:12px 14px;border-top:1px solid rgba(255,255,255,.05);}
+.adm-user{font-size:11px;color:rgba(255,255,255,.25);margin-bottom:8px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.btn-out-adm{width:100%;padding:8px;border:1px solid rgba(255,255,255,.08);background:transparent;
+  color:rgba(255,255,255,.35);border-radius:7px;font-family:var(--sans);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;}
+.btn-out-adm:hover{border-color:rgba(248,113,113,.4);color:#f87171;}
+
+.adm-main{flex:1;overflow-y:auto;background:#0a0c12;display:flex;flex-direction:column;}
+.adm-main::-webkit-scrollbar{width:3px;}
+.adm-main::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:4px;}
+.adm-topbar{padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.05);
+  display:flex;justify-content:space-between;align-items:center;background:#111318;flex-shrink:0;}
+.adm-page-title{font-size:15px;font-weight:700;color:#fff;}
+.adm-page-sub{font-size:11px;color:rgba(255,255,255,.25);margin-top:1px;}
+.adm-panel{padding:16px 18px 80px;display:none;}
+.adm-panel.on{display:block;}
+
+.adm-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+.adm-stat{background:#161a24;border:1px solid rgba(255,255,255,.06);border-radius:13px;padding:14px 13px;transition:border-color .2s;}
+.adm-stat:hover{border-color:rgba(255,255,255,.12);}
+.adm-stat-n{font-family:var(--serif);font-size:32px;font-weight:700;color:#fff;line-height:1;}
+.adm-stat-n.g{color:#6ee7a0;} .adm-stat-n.r{color:#f87171;} .adm-stat-n.w{color:#fbbf24;} .adm-stat-n.b{color:#60a5fa;}
+.adm-stat-l{font-size:10px;color:rgba(255,255,255,.25);margin-top:4px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;}
+
+/* kelompok tabs */
+.kg-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px;}
+.kg-tabs::-webkit-scrollbar{display:none;}
+.kg-tab{padding:7px 14px;border:1px solid rgba(255,255,255,.08);border-radius:20px;
+  background:transparent;font-family:var(--sans);font-size:11.5px;font-weight:600;
+  color:rgba(255,255,255,.4);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.kg-tab:hover{border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.7);}
+.kg-tab.on{background:rgba(110,231,160,.1);border-color:rgba(110,231,160,.3);color:#6ee7a0;}
+
+/* member cards per kelompok */
+.member-cards{display:flex;flex-direction:column;gap:8px;}
+.mc{background:#161a24;border:1px solid rgba(255,255,255,.06);border-radius:14px;
+  overflow:hidden;transition:border-color .2s;cursor:pointer;}
+.mc:hover{border-color:rgba(255,255,255,.12);}
+.mc-header{display:flex;align-items:center;gap:12px;padding:14px 16px;}
+.mc-foto{width:44px;height:44px;border-radius:50%;object-fit:cover;
+  border:2px solid rgba(255,255,255,.1);background:#1e2436;
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.mc-foto img{width:100%;height:100%;border-radius:50%;object-fit:cover;}
+.mc-info{flex:1;}
+.mc-name{font-size:13px;font-weight:700;color:#fff;}
+.mc-detail{font-size:11px;color:rgba(255,255,255,.3);margin-top:2px;}
+.mc-badges{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;}
+.mc-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;
+  background:rgba(255,255,255,.06);color:rgba(255,255,255,.4);letter-spacing:.04em;}
+.mc-stats-mini{display:flex;gap:0;border-top:1px solid rgba(255,255,255,.05);}
+.mc-stat-mini{flex:1;padding:8px 12px;text-align:center;border-right:1px solid rgba(255,255,255,.05);}
+.mc-stat-mini:last-child{border-right:none;}
+.mc-stat-mini-n{font-size:15px;font-weight:700;color:#fff;}
+.mc-stat-mini-n.g{color:#6ee7a0;} .mc-stat-mini-n.r{color:#f87171;}
+.mc-stat-mini-l{font-size:9px;color:rgba(255,255,255,.2);text-transform:uppercase;letter-spacing:.05em;}
+
+/* detail absensi anggota */
+.mc-absen-list{border-top:1px solid rgba(255,255,255,.05);display:none;padding:0 14px 12px;}
+.mc-absen-list.open{display:block;}
+.mc-absen-item{display:flex;align-items:center;justify-content:space-between;
+  padding:8px 0;border-bottom:1px solid rgba(255,255,255,.03);}
+.mc-absen-item:last-child{border-bottom:none;}
+.mc-absen-tgl{font-size:12px;color:rgba(255,255,255,.6);}
+.mc-absen-ket{font-size:11px;color:rgba(255,255,255,.3);margin-top:1px;}
+.mc-absen-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;}
+.mab-h{background:rgba(34,197,94,.1);color:#4ade80;}
+.mab-t{background:rgba(248,113,113,.1);color:#f87171;}
+
+/* filter & table */
+.filter-row{display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+.filter-inp{padding:7px 11px;background:#161a24;border:1px solid rgba(255,255,255,.07);
+  border-radius:8px;font-family:var(--sans);font-size:12px;color:#fff;outline:none;transition:border-color .2s;}
+.filter-inp:focus{border-color:rgba(110,231,160,.35);}
+.filter-inp::placeholder{color:rgba(255,255,255,.18);}
+.filter-inp option{background:#161a24;}
+.btn-export{padding:7px 13px;background:rgba(110,231,160,.08);border:1px solid rgba(110,231,160,.2);
+  color:#6ee7a0;border-radius:8px;font-family:var(--sans);font-size:11.5px;font-weight:600;cursor:pointer;transition:all .2s;}
+.btn-export:hover{background:rgba(110,231,160,.15);}
+.adm-table-wrap{overflow-x:auto;border-radius:12px;border:1px solid rgba(255,255,255,.06);}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead tr{background:#161a24;}
+th{padding:10px 12px;text-align:left;font-size:10px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:rgba(255,255,255,.25);white-space:nowrap;}
+tbody tr{border-top:1px solid rgba(255,255,255,.03);transition:background .15s;}
+tbody tr:hover{background:rgba(255,255,255,.02);}
+td{padding:10px 12px;color:rgba(255,255,255,.65);vertical-align:middle;}
+.td-nama{font-weight:600;color:#fff;}
+.td-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;}
+.td-badge.h{background:rgba(34,197,94,.1);color:#4ade80;}
+.td-badge.t{background:rgba(248,113,113,.1);color:#f87171;}
+.td-foto{width:34px;height:34px;border-radius:7px;object-fit:cover;cursor:pointer;border:1px solid rgba(255,255,255,.08);}
+.td-maps{color:#60a5fa;font-size:11px;text-decoration:none;}
+.td-maps:hover{text-decoration:underline;}
+.td-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);
+  color:rgba(255,255,255,.5);cursor:pointer;font-size:11px;padding:4px 8px;
+  border-radius:6px;transition:all .15s;font-family:var(--sans);}
+.td-btn:hover{background:rgba(255,255,255,.1);color:#fff;}
+.td-btn.del:hover{background:rgba(248,113,113,.1);color:#f87171;border-color:rgba(248,113,113,.2);}
+.empty-adm{text-align:center;padding:40px 20px;color:rgba(255,255,255,.2);}
+.empty-adm .e-ico{font-size:36px;margin-bottom:10px;opacity:.3;}
+.empty-adm p{font-size:12px;}
+
+/* mobile bottom nav */
+.adm-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;
+  background:#111318;border-top:1px solid rgba(255,255,255,.06);padding:6px 0 10px;z-index:100;}
+.bnav-items{display:flex;justify-content:space-around;}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:5px 10px;border:none;background:none;cursor:pointer;font-family:var(--sans);}
+.bnav-item .bni{font-size:18px;}
+.bnav-item .bnl{font-size:9px;font-weight:600;color:rgba(255,255,255,.3);letter-spacing:.04em;text-transform:uppercase;}
+.bnav-item.on .bnl{color:#6ee7a0;}
+
+/* modals */
+#fotoModal{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+#fotoModal.on{display:flex;}
+#fotoModal img{max-width:100%;max-height:85vh;border-radius:14px;}
+.close-modal{position:absolute;top:14px;right:14px;background:rgba(255,255,255,.1);
+  border:none;color:#fff;width:34px;height:34px;border-radius:50%;font-size:15px;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+#editModal{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:998;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+#editModal.on{display:flex;}
+.edit-box{background:#161a24;border:1px solid rgba(255,255,255,.1);border-radius:16px;
+  padding:22px;width:100%;max-width:360px;}
+.edit-title{font-size:15px;font-weight:700;color:#fff;margin-bottom:14px;}
+.edit-field{margin-bottom:10px;}
+.edit-lbl{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  color:rgba(255,255,255,.3);margin-bottom:4px;display:block;}
+.edit-inp{width:100%;padding:9px 12px;background:#0a0c12;border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;font-family:var(--sans);font-size:13px;color:#fff;outline:none;}
+.edit-inp:focus{border-color:rgba(110,231,160,.4);}
+.edit-actions{display:flex;gap:7px;margin-top:14px;}
+.btn-edit-save{flex:1;padding:10px;background:#2c4a3e;color:#6ee7a0;border:none;
+  border-radius:8px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;}
+.btn-edit-cancel{padding:10px 14px;background:rgba(255,255,255,.05);color:rgba(255,255,255,.4);
+  border:none;border-radius:8px;font-family:var(--sans);font-size:13px;cursor:pointer;}
+
+/* SUCCESS */
+#pgSuccess{flex-direction:column;background:var(--paper);z-index:300;}
+.suc-wrap{text-align:center;padding:28px 24px;max-width:340px;animation:riseUp .5s ease both;}
+.suc-ring{width:76px;height:76px;border-radius:50%;background:var(--forest-light);
+  display:flex;align-items:center;justify-content:center;font-size:34px;margin:0 auto 16px;
+  animation:popRing .5s cubic-bezier(.34,1.56,.64,1) both .1s;}
+.suc-title{font-family:var(--serif);font-size:30px;font-weight:600;letter-spacing:-.015em;margin-bottom:5px;}
+.suc-title em{font-style:italic;color:var(--forest);}
+.suc-detail{font-size:12.5px;color:var(--muted);line-height:1.7;margin-bottom:20px;}
+.suc-detail strong{color:var(--ink);}
+.btn-done{padding:11px 26px;background:var(--forest);color:var(--white);border:none;
+  border-radius:10px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;}
+
+/* TOAST & OV LOADER */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(12px);
+  background:var(--ink);color:var(--white);padding:9px 18px;border-radius:10px;
+  font-size:12px;font-weight:500;opacity:0;transition:all .3s;z-index:9999;white-space:nowrap;pointer-events:none;}
+#toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+#ovLoader{position:fixed;inset:0;background:rgba(249,247,243,.88);backdrop-filter:blur(4px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:400;opacity:0;pointer-events:none;transition:opacity .25s;gap:12px;}
+#ovLoader.on{opacity:1;pointer-events:all;}
+.ov-spin{width:32px;height:32px;border-radius:50%;border:3px solid var(--cream);border-top-color:var(--forest);animation:spin .7s linear infinite;}
+.ov-msg{font-size:12.5px;color:var(--muted);}
+
+@keyframes riseUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+@keyframes popRing{0%{transform:scale(0);}70%{transform:scale(1.12);}100%{transform:scale(1);}}
+.absen-inner>*,.rekap-inner>*{animation:riseUp .4s ease both;}
+.absen-inner>*:nth-child(2){animation-delay:.06s;}.absen-inner>*:nth-child(3){animation-delay:.11s;}
+.absen-inner>*:nth-child(4){animation-delay:.16s;}.absen-inner>*:nth-child(5){animation-delay:.2s;}
+.absen-inner>*:nth-child(6){animation-delay:.24s;}
+@media(max-width:640px){
+  .adm-sidebar{display:none;}.adm-bottom-nav{display:block;}
+  .adm-stats{grid-template-columns:repeat(2,1fr);}
+  .adm-panel{padding:14px 12px 90px;}
+  .auth-wrap{padding:24px 16px;}
+  .inp-row{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="page" id="pgLoader"><div class="spin"></div></div>
+
+<!-- LOGIN -->
+<div class="page off" id="pgLogin">
+  <div class="deco-bg">K</div>
+  <div class="auth-wrap">
+    <div class="eyebrow">Absensi Kajian Mahasiswa</div>
+    <h1 class="auth-h">Hadir,<br><em>Belajar.</em></h1>
+    <p class="auth-sub">Masuk untuk mencatat kehadiranmu.</p>
+    <div class="inp-g"><label class="inp-lbl">Email</label>
+      <input class="inp" type="email" id="inpEmail" placeholder="email@mahasiswa.ac.id"></div>
+    <div class="inp-g"><label class="inp-lbl">Password</label>
+      <input class="inp" type="password" id="inpPass" placeholder="••••••••">
+      <div class="inp-err" id="loginErr">Email atau password salah.</div></div>
+    <button class="btn-main" id="btnLogin" onclick="doLogin()">Masuk</button>
+    <div class="auth-footer">Belum punya akun? <button class="lnk" onclick="go('pgRegister')">Daftar</button></div>
+  </div>
+</div>
+
+<!-- REGISTER -->
+<div class="page off" id="pgRegister">
+  <div class="auth-wrap" style="max-width:460px;">
+    <div class="eyebrow">Daftar Akun</div>
+    <h1 class="auth-h" style="font-size:clamp(28px,6vw,40px)">Buat <em>Akun Baru</em></h1>
+    <p class="auth-sub" style="margin-bottom:18px">Daftar sekali, absen selamanya.</p>
+
+    <div class="inp-row">
+      <div class="inp-g"><label class="inp-lbl">Nama Lengkap</label>
+        <input class="inp" type="text" id="regNama" placeholder="Nama lengkapmu"></div>
+      <div class="inp-g"><label class="inp-lbl">Email</label>
+        <input class="inp" type="email" id="regEmail" placeholder="email@kampus.ac.id"></div>
+    </div>
+
+    <div class="inp-row">
+      <div class="inp-g"><label class="inp-lbl">Password</label>
+        <input class="inp" type="password" id="regPass" placeholder="Min. 6 karakter"></div>
+      <div class="inp-g"><label class="inp-lbl">Konfirmasi Password</label>
+        <input class="inp" type="password" id="regPass2" placeholder="Ulangi password"></div>
+    </div>
+
+    <div class="inp-row">
+      <div class="inp-g"><label class="inp-lbl">Tingkat / Semester</label>
+        <select class="inp" id="regTingkat">
+          <option value="">Pilih Tingkat</option>
+          <option>Tingkat 1 (Sem 1-2)</option>
+          <option>Tingkat 2 (Sem 3-4)</option>
+          <option>Tingkat 3 (Sem 5-6)</option>
+          <option>Tingkat 4 (Sem 7-8)</option>
+          <option>Tingkat 5+</option>
+        </select></div>
+      <div class="inp-g"><label class="inp-lbl">Jenis Kelamin</label>
+        <select class="inp" id="regJK">
+          <option value="">Pilih</option>
+          <option value="Laki-laki">Laki-laki</option>
+          <option value="Perempuan">Perempuan</option>
+        </select></div>
+    </div>
+
+    <div class="inp-g"><label class="inp-lbl">Kelompok Kajian</label>
+      <select class="inp" id="regKelompok">
+        <option value="">Pilih Kelompok</option>
+      </select></div>
+
+    <div class="inp-g">
+      <label class="inp-lbl">Foto Profil</label>
+      <div class="foto-reg-box" id="fotoRegBox">
+        <input type="file" id="fotoRegInput" accept="image/*" capture="user" onchange="prevFotoReg(event)">
+        <div class="foto-ph"><div class="foto-ph-ico">🤳</div><div class="foto-ph-t">Upload foto profil</div></div>
+        <img id="regFotoPrev" alt="foto profil">
+      </div>
+    </div>
+
+    <div class="inp-err" id="regErr" style="display:none;margin-bottom:8px;">Gagal daftar.</div>
+    <button class="btn-main" id="btnReg" onclick="doRegister()">Daftar & Masuk</button>
+    <div class="auth-footer">Sudah punya akun? <button class="lnk" onclick="go('pgLogin')">Masuk</button></div>
+  </div>
+</div>
+
+<!-- ABSEN -->
+<div class="page off" id="pgAbsen">
+  <div class="absen-inner">
+    <div class="topbar">
+      <div>
+        <div class="top-greet">Halo, <span id="greetName">—</span> 👋</div>
+        <div class="top-date" id="greetDate">—</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-sm blue" onclick="go('pgRekap');loadRekap()">Rekap</button>
+        <button class="btn-sm" onclick="doLogout()">Keluar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Kelompok Kajian</div>
+      <div class="card-sub">Kelompokmu hari ini</div>
+      <div class="kg-grid" id="kgGrid"></div>
+      <div class="hint-err" id="errKg">Pilih kelompok dulu.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Status Kehadiran</div>
+      <div class="card-sub">Kamu hadir atau tidak?</div>
+      <div class="st-row">
+        <div class="st-opt" id="stH" onclick="pilihStatus('hadir')"><div class="st-ico">✅</div><div class="st-lbl">Hadir</div></div>
+        <div class="st-opt" id="stT" onclick="pilihStatus('tidak')"><div class="st-ico">❌</div><div class="st-lbl">Tidak Hadir</div></div>
+      </div>
+      <div class="hint-err" id="errSt">Pilih status kehadiran.</div>
+    </div>
+
+    <div class="card" id="cardFoto">
+      <div class="card-title">Bukti Kehadiran</div>
+      <div class="card-sub">Foto selfie atau suasana kajian</div>
+      <div class="photo-box" id="photoBox">
+        <input type="file" id="fotoInput" accept="image/*" capture="environment" onchange="onFoto(event)">
+        <div class="ph-placeholder"><div class="ph-ico">📸</div><div class="ph-t">Tap untuk ambil foto</div><div class="ph-s">Selfie atau foto lokasi kajian</div></div>
+        <img id="imgPrev" alt="preview">
+        <div class="photo-change">Ganti</div>
+      </div>
+      <div class="hint-err" id="errFoto">Upload foto bukti dulu.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Catatan <span class="tag-opt">· opsional</span></div>
+      <div class="card-sub">Keterangan jika ada</div>
+      <textarea class="txta" id="inpCatatan" rows="2" placeholder="Contoh: terlambat, izin sakit..."></textarea>
+    </div>
+
+    <button class="btn-submit" id="btnSubmit" onclick="kirimAbsen()">📤 Kirim Absensi</button>
+  </div>
+</div>
+
+<!-- REKAP MAHASISWA -->
+<div class="page off" id="pgRekap">
+  <div class="rekap-inner">
+    <div class="topbar">
+      <div><div class="top-greet">Rekap <span>Saya</span></div><div class="top-date" id="rekapNama">—</div></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-sm blue" onclick="go('pgAbsen')">← Absen</button>
+        <button class="btn-sm" onclick="doLogout()">Keluar</button>
+      </div>
+    </div>
+    <div class="stat-cards">
+      <div class="stat-c"><div class="stat-n w" id="rkTotal">0</div><div class="stat-l">Total</div></div>
+      <div class="stat-c"><div class="stat-n g" id="rkHadir">0</div><div class="stat-l">Hadir</div></div>
+      <div class="stat-c"><div class="stat-n r" id="rkTidak">0</div><div class="stat-l">Tidak</div></div>
+    </div>
+    <div class="rekap-list" id="rekapList"><div style="text-align:center;padding:30px;color:var(--muted);font-size:13px;">Memuat...</div></div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div class="page off" id="pgAdmin">
+  <div class="admin-layout">
+    <aside class="adm-sidebar">
+      <div class="adm-brand">
+        <div class="adm-brand-lbl">Admin Panel</div>
+        <div class="adm-brand-name">Kajian <span>Admin</span></div>
+        <div class="live-wrap"><div class="ldot"></div><div class="live-lbl">Live sync</div></div>
+      </div>
+      <nav class="adm-nav">
+        <div class="adm-nav-lbl">Menu</div>
+        <button class="adm-nav-item on" onclick="showPanel('dashboard',this)">📊 Dashboard</button>
+        <button class="adm-nav-item" onclick="showPanel('anggota',this)">👥 Anggota & Absensi</button>
+        <button class="adm-nav-item" onclick="showPanel('rekap',this)">📋 Rekap Lengkap</button>
+        <button class="adm-nav-item" onclick="showPanel('tidakhadir',this)">❌ Tidak Hadir</button>
+      </nav>
+      <div class="adm-footer">
+        <div class="adm-user" id="admEmail">—</div>
+        <button class="btn-out-adm" onclick="doLogout()">Keluar →</button>
+      </div>
+    </aside>
+
+    <div class="adm-main">
+      <div class="adm-topbar">
+        <div>
+          <div class="adm-page-title" id="admTitle">Dashboard</div>
+          <div class="adm-page-sub" id="admSub">Ringkasan absensi kajian</div>
+        </div>
+        <button class="btn-export" onclick="exportCSV()" style="font-size:11px;padding:6px 12px;">⬇️ CSV</button>
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="adm-panel on" id="panDashboard">
+        <div class="adm-stats">
+          <div class="adm-stat"><div class="adm-stat-n w" id="adSemua">0</div><div class="adm-stat-l">Total Absensi</div></div>
+          <div class="adm-stat"><div class="adm-stat-n g" id="adHadir">0</div><div class="adm-stat-l">Hadir</div></div>
+          <div class="adm-stat"><div class="adm-stat-n r" id="adTidak">0</div><div class="adm-stat-l">Tidak Hadir</div></div>
+          <div class="adm-stat"><div class="adm-stat-n b" id="adAnggota">0</div><div class="adm-stat-l">Anggota</div></div>
+        </div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(255,255,255,.2);margin-bottom:10px;">Tidak Hadir Hari Ini</div>
+        <div id="dashTidakList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+
+      <!-- ANGGOTA PER KELOMPOK -->
+      <div class="adm-panel" id="panAnggota">
+        <div class="kg-tabs" id="kgTabsAdmin"></div>
+        <div class="member-cards" id="memberCards">
+          <div style="color:rgba(255,255,255,.2);font-size:13px;padding:20px;">Memuat anggota...</div>
+        </div>
+      </div>
+
+      <!-- REKAP LENGKAP -->
+      <div class="adm-panel" id="panRekap">
+        <div class="filter-row">
+          <input class="filter-inp" type="text" id="filterNama" placeholder="🔍 Cari nama..." oninput="renderTable()" style="flex:1;min-width:100px;">
+          <select class="filter-inp" id="filterKg" onchange="renderTable()"><option value="">Semua Kelompok</option></select>
+          <select class="filter-inp" id="filterSt" onchange="renderTable()">
+            <option value="">Semua Status</option>
+            <option value="hadir">Hadir</option>
+            <option value="tidak">Tidak Hadir</option>
+          </select>
+        </div>
+        <div class="adm-table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nama</th><th>Kelompok</th><th>Status</th>
+              <th>Tanggal</th><th>Waktu</th><th>Foto</th><th>Catatan</th><th>Aksi</th>
+            </tr></thead>
+            <tbody id="absenTbody"></tbody>
+          </table>
+        </div>
+        <div class="empty-adm" id="emptyAdm" style="display:none;"><div class="e-ico">📋</div><p>Belum ada data.</p></div>
+      </div>
+
+      <!-- TIDAK HADIR -->
+      <div class="adm-panel" id="panTidakhadir">
+        <div class="filter-row">
+          <input class="filter-inp" type="text" id="filterTgl" placeholder="📅 Cari tanggal..." oninput="renderTidakHadir()" style="flex:1;">
+          <select class="filter-inp" id="filterKgTH" onchange="renderTidakHadir()"><option value="">Semua Kelompok</option></select>
+        </div>
+        <div id="tidakHadirList" style="display:flex;flex-direction:column;gap:7px;"></div>
+        <div class="empty-adm" id="emptyTH" style="display:none;"><div class="e-ico">✅</div><p>Semua hadir!</p></div>
+      </div>
+    </div>
+
+    <!-- Mobile Nav -->
+    <div class="adm-bottom-nav">
+      <div class="bnav-items">
+        <button class="bnav-item on" onclick="showPanel('dashboard',this,true)"><span class="bni">📊</span><span class="bnl">Home</span></button>
+        <button class="bnav-item" onclick="showPanel('anggota',this,true)"><span class="bni">👥</span><span class="bnl">Anggota</span></button>
+        <button class="bnav-item" onclick="showPanel('rekap',this,true)"><span class="bni">📋</span><span class="bnl">Rekap</span></button>
+        <button class="bnav-item" onclick="showPanel('tidakhadir',this,true)"><span class="bni">❌</span><span class="bnl">Absen</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS -->
+<div class="page off" id="pgSuccess">
+  <div class="suc-wrap">
+    <div class="suc-ring">🎉</div>
+    <div class="suc-title">Absensi<br><em>Tercatat!</em></div>
+    <div class="suc-detail" id="sucDetail">—</div>
+    <button class="btn-done" onclick="go('pgAbsen');resetAbsenForm()">Selesai</button>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div id="fotoModal">
+  <button class="close-modal" onclick="document.getElementById('fotoModal').classList.remove('on')">✕</button>
+  <img id="fotoModalImg" src="" alt="">
+</div>
+<div id="editModal">
+  <div class="edit-box">
+    <div class="edit-title">✏️ Edit Absensi</div>
+    <div class="edit-field"><label class="edit-lbl">Status</label>
+      <select class="edit-inp" id="editStatus"><option value="hadir">✅ Hadir</option><option value="tidak">❌ Tidak Hadir</option></select></div>
+    <div class="edit-field"><label class="edit-lbl">Catatan</label>
+      <input class="edit-inp" type="text" id="editCatatan" placeholder="Catatan..."></div>
+    <input type="hidden" id="editDocId">
+    <div class="edit-actions">
+      <button class="btn-edit-cancel" onclick="document.getElementById('editModal').classList.remove('on')">Batal</button>
+      <button class="btn-edit-save" onclick="saveEdit()">💾 Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div id="ovLoader"><div class="ov-spin"></div><div class="ov-msg" id="ovMsg">Memproses...</div></div>
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════
+// ⚙️ CONFIG FIREBASE
+// ══════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyCPi4a0_QPJVZ2UwNF2sa02UjqO1-hcD_4",
+  authDomain:        "absen-d0c39.firebaseapp.com",
+  projectId:         "absen-d0c39",
+  storageBucket:     "absen-d0c39.firebasestorage.app",
+  messagingSenderId: "480877040202",
+  appId:             "1:480877040202:web:4f259ef594d7e4740d4cb3"
+};
+
+// ══════════════════════════════════
+// 👑 EMAIL ADMIN
+// ══════════════════════════════════
+const ADMIN_EMAILS = [
+  "michoahmad02@gmail.com",
+];
+
+// ══════════════════════════════════
+// 📚 KELOMPOK KAJIAN
+// ══════════════════════════════════
+const KELOMPOK = [
+  { id:'kelompok-1', nama:'Kelompok 1', icon:'📖' },
+  { id:'kelompok-2', nama:'Kelompok 2', icon:'📚' },
+  { id:'kelompok-3', nama:'Kelompok 3', icon:'✏️' },
+  { id:'kelompok-4', nama:'Kelompok 4', icon:'🌙' },
+  { id:'kelompok-5', nama:'Kelompok 5', icon:'⭐' },
+  { id:'umum',       nama:'Kajian Umum', icon:'🕌' },
+];
+// ══════════════════════════════════
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+let absenAll = [];
+let usersAll = [];
+let state = { kelompok:null, status:null, foto:null };
+let currentUser = null;
+let activeKgAdmin = 'semua';
+
+// init kelompok options
+function initKelompok() {
+  // absen grid
+  const g=document.getElementById('kgGrid');
+  KELOMPOK.forEach(k=>{
+    const el=document.createElement('div');
+    el.className='kg-opt';el.id='kg_'+k.id;
+    el.innerHTML=`<div class="kg-ico">${k.icon}</div><div class="kg-nm">${k.nama}</div>`;
+    el.onclick=()=>{
+      document.querySelectorAll('.kg-opt').forEach(e=>e.classList.remove('on'));
+      el.classList.add('on');state.kelompok=k;
+      document.getElementById('errKg').style.display='none';
+    };
+    g.appendChild(el);
+  });
+  // register select
+  const rs=document.getElementById('regKelompok');
+  KELOMPOK.forEach(k=>{const o=document.createElement('option');o.value=k.id;o.textContent=k.nama;rs.appendChild(o);});
+  // filter selects
+  ['filterKg','filterKgTH'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    KELOMPOK.forEach(k=>{const o=document.createElement('option');o.value=k.id;o.textContent=k.nama;el.appendChild(o);});
+  });
+  // admin kelompok tabs
+  const tabs=document.getElementById('kgTabsAdmin');
+  if(tabs){
+    const all=document.createElement('button');
+    all.className='kg-tab on';all.textContent='Semua';all.dataset.kg='semua';
+    all.onclick=()=>switchKgTab('semua',all);
+    tabs.appendChild(all);
+    KELOMPOK.forEach(k=>{
+      const t=document.createElement('button');
+      t.className='kg-tab';t.textContent=k.icon+' '+k.nama;t.dataset.kg=k.id;
+      t.onclick=()=>switchKgTab(k.id,t);
+      tabs.appendChild(t);
+    });
+  }
+}
+initKelompok();
+
+// utils
+function go(id){
+  ['pgLoader','pgLogin','pgRegister','pgAbsen','pgRekap','pgAdmin','pgSuccess']
+    .forEach(p=>document.getElementById(p).classList.toggle('off',p!==id));
+}
+function toast(msg,dur=2800){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('on');
+  setTimeout(()=>el.classList.remove('on'),dur);
+}
+function ovLoad(show,msg='Memproses...'){
+  document.getElementById('ovMsg').textContent=msg;
+  document.getElementById('ovLoader').classList.toggle('on',show);
+}
+function isAdmin(email){return ADMIN_EMAILS.map(e=>e.toLowerCase()).includes((email||'').toLowerCase());}
+
+// compress image
+function compressImg(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=500;let w=img.width,h=img.height;
+        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        if(h>MAX){w=Math.round(w*MAX/h);h=MAX;}
+        const c=document.createElement('canvas');
+        c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/jpeg',.65));
+      };img.src=e.target.result;
+    };r.onerror=rej;r.readAsDataURL(file);
+  });
+}
+
+// AUTH
+auth.onAuthStateChanged(user=>{
+  if(user){
+    currentUser=user;
+    if(isAdmin(user.email)){
+      document.getElementById('admEmail').textContent=user.email;
+      go('pgAdmin');loadAdminData();
+    } else {
+      const nm=user.displayName||user.email.split('@')[0];
+      document.getElementById('greetName').textContent=nm.split(' ')[0];
+      document.getElementById('greetDate').textContent=
+        new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+      // auto set kelompok dari profil
+      db.collection('users').doc(user.uid).get().then(doc=>{
+        if(doc.exists&&doc.data().kelompok_id){
+          const k=KELOMPOK.find(x=>x.id===doc.data().kelompok_id);
+          if(k){
+            state.kelompok=k;
+            const el=document.getElementById('kg_'+k.id);
+            if(el){document.querySelectorAll('.kg-opt').forEach(e=>e.classList.remove('on'));el.classList.add('on');}
+          }
+        }
+      });
+      go('pgAbsen');
+    }
+  } else {
+    currentUser=null;go('pgLogin');
+  }
+});
+
+// LOGIN
+async function doLogin(){
+  const email=document.getElementById('inpEmail').value.trim();
+  const pass=document.getElementById('inpPass').value;
+  const err=document.getElementById('loginErr');
+  err.style.display='none';
+  if(!email||!pass){err.textContent='Isi email dan password.';err.style.display='block';return;}
+  document.getElementById('btnLogin').disabled=true;
+  try{await auth.signInWithEmailAndPassword(email,pass);}
+  catch(e){
+    document.getElementById('btnLogin').disabled=false;
+    err.textContent=(e.code==='auth/user-not-found'||e.code==='auth/wrong-password')
+      ?'Email atau password salah.':e.message;
+    err.style.display='block';
+  }
+}
+document.getElementById('inpPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+
+// REGISTER
+function prevFotoReg(e){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    document.getElementById('regFotoPrev').src=ev.target.result;
+    document.getElementById('fotoRegBox').classList.add('filled');
+  };r.readAsDataURL(file);
+}
+
+async function doRegister(){
+  const nama=document.getElementById('regNama').value.trim();
+  const email=document.getElementById('regEmail').value.trim();
+  const pass=document.getElementById('regPass').value;
+  const pass2=document.getElementById('regPass2').value;
+  const tingkat=document.getElementById('regTingkat').value;
+  const jk=document.getElementById('regJK').value;
+  const kgId=document.getElementById('regKelompok').value;
+  const fotoFile=document.getElementById('fotoRegInput').files[0];
+  const err=document.getElementById('regErr');
+  err.style.display='none';
+
+  if(!nama||!email||!pass||!pass2||!tingkat||!jk||!kgId){
+    err.textContent='Lengkapi semua field wajib.';err.style.display='block';return;}
+  if(pass!==pass2){err.textContent='Password tidak cocok!';err.style.display='block';return;}
+  if(pass.length<6){err.textContent='Password minimal 6 karakter.';err.style.display='block';return;}
+
+  document.getElementById('btnReg').disabled=true;
+  ovLoad(true,'Mendaftarkan akun...');
+  try{
+    const cred=await auth.createUserWithEmailAndPassword(email,pass);
+    await cred.user.updateProfile({displayName:nama});
+
+    let fotoB64=null;
+    if(fotoFile){ovLoad(true,'Upload foto profil...');fotoB64=await compressImg(fotoFile);}
+
+    const kg=KELOMPOK.find(k=>k.id===kgId);
+    await db.collection('users').doc(cred.user.uid).set({
+      nama,email,tingkat,jenis_kelamin:jk,
+      kelompok_id:kgId,kelompok:kg?kg.nama:'—',
+      foto_profil:fotoB64,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    ovLoad(false);
+  }catch(e){
+    ovLoad(false);
+    document.getElementById('btnReg').disabled=false;
+    err.textContent=e.code==='auth/email-already-in-use'?'Email sudah terdaftar.':e.message;
+    err.style.display='block';
+  }
+}
+
+// LOGOUT
+async function doLogout(){await auth.signOut();resetAbsenForm();go('pgLogin');}
+
+// PILIH STATUS
+function pilihStatus(v){
+  state.status=v;
+  document.getElementById('stH').className='st-opt'+(v==='hadir'?' hadir':'');
+  document.getElementById('stT').className='st-opt'+(v==='tidak'?' tidak':'');
+  document.getElementById('errSt').style.display='none';
+  document.getElementById('cardFoto').style.opacity=v==='hadir'?'1':'0.5';
+}
+
+// FOTO ABSEN
+function onFoto(e){
+  const file=e.target.files[0];if(!file)return;
+  state.foto=file;
+  const r=new FileReader();
+  r.onload=ev=>{
+    document.getElementById('imgPrev').src=ev.target.result;
+    document.getElementById('photoBox').classList.add('filled');
+    document.getElementById('errFoto').style.display='none';
+    toast('📸 Foto dipilih!');
+  };r.readAsDataURL(file);
+}
+
+// KIRIM ABSEN
+async function kirimAbsen(){
+  let ok=true;
+  if(!state.kelompok){document.getElementById('errKg').style.display='block';ok=false;}
+  if(!state.status){document.getElementById('errSt').style.display='block';ok=false;}
+  if(state.status==='hadir'&&!state.foto){document.getElementById('errFoto').style.display='block';ok=false;}
+  if(!ok){toast('⚠️ Lengkapi data yang wajib');return;}
+
+  const user=auth.currentUser;
+  document.getElementById('btnSubmit').disabled=true;
+  try{
+    const now=new Date();
+    let fotoB64=null;
+    if(state.foto){ovLoad(true,'Memproses foto...');fotoB64=await compressImg(state.foto);}
+    ovLoad(true,'Menyimpan absensi...');
+    await db.collection('absensi').add({
+      uid:user.uid,nama:user.displayName||user.email,email:user.email,
+      kelompok_id:state.kelompok.id,kelompok:state.kelompok.nama,
+      status:state.status,foto_b64:fotoB64,
+      catatan:document.getElementById('inpCatatan').value.trim()||null,
+      waktu:firebase.firestore.FieldValue.serverTimestamp(),
+      waktu_str:now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}),
+      tanggal:now.toLocaleDateString('id-ID'),
+      tanggal_iso:now.toISOString().split('T')[0],
+    });
+    ovLoad(false);
+    const nm=user.displayName||user.email;
+    document.getElementById('sucDetail').innerHTML=
+      `<strong>${nm}</strong><br>${state.kelompok.nama} · ${state.status==='hadir'?'✅ Hadir':'❌ Tidak Hadir'}<br>${now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} · ${now.toLocaleDateString('id-ID')}`;
+    go('pgSuccess');
+  }catch(err){
+    ovLoad(false);document.getElementById('btnSubmit').disabled=false;
+    toast('❌ Gagal: '+err.message,5000);
+  }
+}
+
+function resetAbsenForm(){
+  state={kelompok:null,status:null,foto:null};
+  document.querySelectorAll('.kg-opt').forEach(e=>e.classList.remove('on'));
+  document.getElementById('stH').className='st-opt';
+  document.getElementById('stT').className='st-opt';
+  document.getElementById('photoBox').classList.remove('filled');
+  document.getElementById('imgPrev').src='';
+  document.getElementById('fotoInput').value='';
+  document.getElementById('inpCatatan').value='';
+  document.getElementById('cardFoto').style.opacity='1';
+  document.getElementById('btnSubmit').disabled=false;
+  ['errKg','errSt','errFoto'].forEach(id=>document.getElementById(id).style.display='none');
+}
+
+// REKAP MAHASISWA
+async function loadRekap(){
+  const user=auth.currentUser;if(!user)return;
+  document.getElementById('rekapNama').textContent=user.displayName||user.email;
+  const snap=await db.collection('absensi').where('uid','==',user.uid).orderBy('waktu','desc').get();
+  const list=document.getElementById('rekapList');
+  let total=0,hadir=0,tidak=0;
+  if(snap.empty){list.innerHTML='<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px;">Belum ada data absensi.</div>';return;}
+  list.innerHTML='';
+  snap.forEach(doc=>{
+    const d=doc.data();total++;
+    const h=d.status==='hadir';if(h)hadir++;else tidak++;
+    const item=document.createElement('div');item.className='rekap-item';
+    item.innerHTML=`<div class="rekap-ico ${h?'h':'t'}">${h?'✅':'❌'}</div>
+      <div class="rekap-info">
+        <div class="rekap-tgl">${d.tanggal||'—'} · ${d.waktu_str||'—'}</div>
+        <div class="rekap-meta">${d.kelompok||'—'}${d.catatan?' · '+d.catatan:''}</div>
+      </div>
+      <span class="rekap-badge ${h?'badge-h':'badge-t'}">${h?'Hadir':'Tidak'}</span>`;
+    list.appendChild(item);
+  });
+  document.getElementById('rkTotal').textContent=total;
+  document.getElementById('rkHadir').textContent=hadir;
+  document.getElementById('rkTidak').textContent=tidak;
+}
+
+// ADMIN DATA
+function loadAdminData(){
+  db.collection('absensi').orderBy('waktu','desc').onSnapshot(snap=>{
+    absenAll=[];snap.forEach(doc=>absenAll.push({id:doc.id,...doc.data()}));
+    const h=absenAll.filter(d=>d.status==='hadir').length;
